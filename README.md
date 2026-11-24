@@ -2,7 +2,7 @@
 
 Un solo panel para todo el render con Arnold en Autodesk Maya 2026 y 2027 (Mac y Windows): el visor de Arnold, los ajustes de render y unos presets que se combinan, ordenados según el flujo de trabajo (preparar, probar, afinar y renderizar).
 
-> **Estado: fase 1.** Panel acoplado al visor de Arnold con barra de prueba, pestaña Calidad en tres niveles (Sencillo, Detalle, Experto), copia de seguridad con Restaurar y espacio de trabajo «Modo render». Historial y salida llegan en la fase 2. Plan: https://claude.ai/artifact/Grh7sw3cpBeuvqHV2AYbud
+> **Estado: fase 2.** Panel acoplado al visor de Arnold con barra de prueba, pestaña Calidad en tres niveles (Sencillo, Detalle, Experto), copia de seguridad con Restaurar y espacio de trabajo «Modo render». Historial de pruebas con comparación A/B y Recuperar, pestaña Salida (imagen fija, secuencia, giro con su cámara, nombres, pasadas) y render final en segundo plano con progreso. Plan: https://claude.ai/artifact/Grh7sw3cpBeuvqHV2AYbud
 
 ![Panel junto al visor de Arnold](docs/fase1_panel_y_visor.jpg)
 
@@ -30,6 +30,7 @@ maya_ajustes.restaurar()                                     # vuelve atrás
 
 ## Fases
 
+- Fase 2: [docs/fase2_informe.md](docs/fase2_informe.md)
 - Fase 1: [docs/fase1_informe.md](docs/fase1_informe.md)
 - Fase 0 (medidas): [docs/fase0_informe.md](docs/fase0_informe.md)
 
@@ -44,6 +45,7 @@ Escena de prueba (interior con ventana, vidrio, cera, cromo y hojas recortadas) 
 ```bash
 python3 -m unittest discover tests                                    # sin Maya (el panel necesita PySide6)
 maya -command "python(\"exec(open('herramientas/prueba_panel.py').read())\")"  # panel en Maya, con RENDERDESK_RAIZ
+maya -command "python(\"exec(open('herramientas/prueba_fase2.py').read())\")"  # historial, salida y giro de 120 fotogramas
 mayapy herramientas/medir_presets.py /carpeta/salida 960               # renders con cada preset
 mayapy herramientas/componer_lamina.py /carpeta/salida                 # lámina comparativa
 maya -command "python(\"exec(open('herramientas/sonda_visor.py').read())\")"   # control del Arnold RenderView
@@ -55,4 +57,4 @@ MIT. Ver `LICENSE`.
 
 ---
 
-**English summary.** RenderDesk is a single dockable panel for rendering with Arnold in Maya: the Arnold RenderView, the render settings and stackable presets (quality + scene type + extras + output). Phase 1 adds the docked panel next to the Arnold RenderView (camera, size, IPR, region, snapshot), the Quality tab in three levels (Simple, Detail, Expert), backup/restore and a «Render mode» workspace. The interface is in Spanish and ready for translation.
+**English summary.** RenderDesk is a single dockable panel for rendering with Arnold in Maya: the Arnold RenderView, the render settings and stackable presets (quality + scene type + extras + output). Phase 1 adds the docked panel next to the Arnold RenderView (camera, size, IPR, region, snapshot), the Quality tab in three levels (Simple, Detail, Expert), backup/restore and a «Render mode» workspace. Phase 2 adds a test history with A/B comparison and settings recall, the Output tab (still, sequence, 360° turntable with its own camera, file naming, AOV packages) and a background final render with progress. The interface is in Spanish and ready for translation.

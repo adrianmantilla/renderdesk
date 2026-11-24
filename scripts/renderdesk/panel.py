@@ -10,11 +10,22 @@ Instantánea. Debajo, la pestaña Calidad con tres niveles sobre los mismos valo
 Cada cambio se escribe en la escena al momento (con un pequeño retardo para no
 reiniciar el render interactivo a cada píxel del deslizador). Antes del primer
 cambio se guarda una copia, y «Restaurar lo que tenía» vuelve a ella.
+
+Bajo la barra, el historial de pruebas (cada Instantánea guarda imagen, tiempo y
+ajustes) y, al lanzar el render final, su progreso. La pestaña Salida dice qué se
+renderiza, cómo se llama y con qué pasadas.
 """
 
+import os
+import sys
+import tempfile
+import time
+
 import renderdesk
-from renderdesk import estilo, modelo, presets
+from renderdesk import coste, estilo, historial, lanzador, modelo, presets, salida
 from renderdesk.i18n import t
+from renderdesk.panel_historial import CompararAB, TiraHistorial, texto_entrada
+from renderdesk.panel_salida import PestanaSalida, TarjetaRender
 from renderdesk.qt import QtCore, QtGui, QtWidgets
 
 Qt = QtCore.Qt
@@ -44,6 +55,13 @@ class Servicios(object):
         self.modo = False
         self.prefs = {}
         self.aplicaciones = 0
+        self.carpeta = tempfile.mkdtemp(prefix="renderdesk_")
+        self.datos_salida = {"prefijo": "<Scene>/<Scene>_<Camera>", "inicio": 1, "fin": 1, "fotograma": 1,
+                             "formato": "png", "aovs": [], "autotx": True, "usar_tx": True, "animacion": False}
+        self.giros = 0
+        self.avisos = []
+        self.carpetas_abiertas = []
+        self.segundos_por_fotograma = 0.05
 
     def preparar(self): return True
     def leer(self): return dict(self.valores), []
@@ -96,6 +114,58 @@ class Servicios(object):
     def modo_render(self, activo): self.modo = activo
     def preferencia(self, clave, defecto=""): return self.prefs.get(clave, defecto)
     def guardar_preferencia(self, clave, valor): self.prefs[clave] = str(valor)
+
+    # ----- fase 2: historial y salida -----
+
+    def nombre_escena(self): return "escena"
+    def carpeta_historial(self): return os.path.join(self.carpeta, "historial", self.nombre_escena())
+
+    def guardar_imagen_visor(self, ruta):
+        """Una imagen lisa con un color que depende de los valores, para que cada prueba se distinga."""
+        imagen = QtGui.QImage(self.tamano[0] // 8, self.tamano[1] // 8, QtGui.QImage.Format_RGB32)
+        imagen.fill(QtGui.QColor.fromHsv((self.valores.get("aa", 3) * 40) % 360, 120, 200))
+        return imagen.save(ruta)
+
+    def salida(self):
+        datos = dict(self.datos_salida)
+        datos["aovs"] = list(datos["aovs"])
+        return datos
+
+    def poner_salida(self, **cambios):
+        if "paquete" in cambios:
+            self.datos_salida["aovs"] = list(salida.aovs_de(cambios.pop("paquete")))
+        self.datos_salida.update(cambios)
+
+    def crear_giro(self, inicio, fin):
+        self.giros += 1
+        if "camara_giro" not in self.lista_camaras:
+            self.lista_camaras.append("camara_giro")
+        self.camara_actual = "camara_giro"
+        return "camara_giro"
+
+    def preparar_render(self, que, nucleos):
+        """Un «render» de mentira: un Python aparte que escribe imágenes y líneas «NN% done»."""
+        d = self.datos_salida
+        inicio, fin = (d["fotograma"], d["fotograma"]) if que == "fija" else (d["inicio"], d["fin"])
+        total = salida.total_fotogramas(que, inicio, fin)
+        carpeta = os.path.join(self.carpeta, "images")
+        guion = (
+            "import os, sys, time\n"
+            "carpeta, inicio, fin, pausa = sys.argv[1], int(sys.argv[2]), int(sys.argv[3]), float(sys.argv[4])\n"
+            "os.makedirs(os.path.join(carpeta, 'escena'), exist_ok=True)\n"
+            "for f in range(inicio, fin + 1):\n"
+            "    for pct in (0, 50, 100):\n"
+            "        print('%d%% done - 10 rays/pixel' % pct, flush=True)\n"
+            "        time.sleep(pausa / 3)\n"
+            "    open(os.path.join(carpeta, 'escena', 'escena.%04d.png' % f), 'wb').write(b'png')\n"
+        )
+        return {"comando": [sys.executable, "-c", guion, carpeta, str(inicio), str(fin),
+                            str(self.segundos_por_fotograma)],
+                "carpeta": carpeta, "extension": ".png", "total": total,
+                "registro": os.path.join(self.carpeta, "render.log"), "copia": ""}
+
+    def aviso_terminado(self, texto): self.avisos.append(texto)
+    def abrir_carpeta(self, ruta): self.carpetas_abiertas.append(ruta)
 
 
 # ---------------------------------------------------------------- piezas
@@ -198,6 +268,9 @@ class PanelRenderDesk(QtWidgets.QWidget):
         self._esperados = {}
         self._guardada = None
         self._quieto = False
+        self._desde = None              # cuándo empezó a renderizar la prueba actual (para medir su tiempo)
+        self.lanzamiento = None
+        self._carpeta_final = ""
         estilo.aplicar(self, NOMBRE_OBJETO)
         self.setMinimumWidth(330)
 
@@ -210,8 +283,14 @@ class PanelRenderDesk(QtWidgets.QWidget):
         capa_cuerpo.setContentsMargins(10, 10, 10, 8)
         capa_cuerpo.setSpacing(8)
         capa_cuerpo.addWidget(self._crear_barra())
+        capa_cuerpo.addWidget(self._crear_historial())
+        self.tarjeta_render = TarjetaRender()
+        self.tarjeta_render.cancelar.connect(self._al_cancelar_render)
+        self.tarjeta_render.abrir_carpeta.connect(self._al_abrir_carpeta)
+        capa_cuerpo.addWidget(self.tarjeta_render)
         self.pestanas = QtWidgets.QTabWidget()
         self.pestanas.addTab(self._crear_calidad(), t("pestana.calidad"))
+        self.pestanas.addTab(self._crear_salida(), t("pestana.salida"))
         capa_cuerpo.addWidget(self.pestanas, 1)
         capa_cuerpo.addLayout(self._crear_pie())
         capa.addWidget(cuerpo, 1)
@@ -277,6 +356,37 @@ class PanelRenderDesk(QtWidgets.QWidget):
         self.estado = estilo.etiqueta("", "tenue", ajuste=True)
         capa.addWidget(self.estado)
         return marco
+
+    def _crear_historial(self):
+        marco, capa = estilo.tarjeta(8, 4)
+        cabeza = QtWidgets.QHBoxLayout()
+        cabeza.addWidget(estilo.etiqueta(t("historial.titulo"), "seccion"))
+        cabeza.addStretch(1)
+        self.cuenta_historial = estilo.etiqueta("", "tenue")
+        cabeza.addWidget(self.cuenta_historial)
+        capa.addLayout(cabeza)
+        self.tira = TiraHistorial()
+        self.tira.comparar.connect(self._al_comparar)
+        self.tira.recuperar.connect(self._al_recuperar)
+        self.tira.borrar.connect(self._al_borrar)
+        capa.addWidget(self.tira)
+        marco.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Maximum)
+        return marco
+
+    def _crear_salida(self):
+        self.pestana_salida = PestanaSalida(self.servicios)
+        self.pestana_salida.que_cambiado.connect(self._al_que)
+        self.pestana_salida.render_final.connect(self._al_render_final)
+        zona = QtWidgets.QScrollArea()
+        zona.setWidgetResizable(True)
+        zona.setFrameShape(QtWidgets.QFrame.NoFrame)
+        zona.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        zona.setWidget(self.pestana_salida)
+        contenedor = QtWidgets.QWidget()
+        capa = QtWidgets.QVBoxLayout(contenedor)
+        capa.setContentsMargins(0, 8, 0, 0)
+        capa.addWidget(zona)
+        return contenedor
 
     def _crear_calidad(self):
         pagina = QtWidgets.QWidget()
@@ -487,6 +597,7 @@ class PanelRenderDesk(QtWidgets.QWidget):
         self._esperados = self.sel.valores() if self.sel.hay_preset() else dict(valores)
         self.vigilar(adoptar=True)
         self.refrescar()
+        self.refrescar_historial()
 
     def nivel(self):
         return next((n for n, b in self.botones_nivel.items() if b.isChecked()), "sencillo")
@@ -536,6 +647,7 @@ class PanelRenderDesk(QtWidgets.QWidget):
                 boton.setEnabled(sel.modificado())
             self.boton_restaurar.setEnabled(self.servicios.hay_copia())
             self._refrescar_barra()
+            self._refrescar_salida()
         finally:
             self._quieto = False
 
@@ -642,6 +754,8 @@ class PanelRenderDesk(QtWidgets.QWidget):
         self._guardada = self._datos_seleccion()
         self.servicios.aplicar(valores, etiqueta=self.sel.nombre(), seleccion=self._guardada)
         self._esperados = valores
+        if self._desde is not None:
+            self._desde = time.time()           # el render interactivo vuelve a empezar
         self.refrescar()
 
     def _datos_seleccion(self):
@@ -693,13 +807,17 @@ class PanelRenderDesk(QtWidgets.QWidget):
 
     def _al_elegir_camara(self, indice):
         self.servicios.poner_camara(self.combo_camara.itemText(indice))
+        self._al_elegir_camara_reinicia()
         self._refrescar_barra()
+        self._refrescar_salida()
 
     def _al_elegir_tamano(self, indice):
         datos = self.combo_tamano.itemData(indice)
         if datos:
             self.servicios.poner_resolucion(*datos)
+        self._al_elegir_camara_reinicia()
         self._refrescar_barra()
+        self._refrescar_estimado()
 
     def _al_probar(self, activo):
         if self._quieto:
@@ -707,6 +825,7 @@ class PanelRenderDesk(QtWidgets.QWidget):
         if self._temporizador.isActive():
             self.aplicar_pendiente()
         self.servicios.probar(activo, resolucion_prueba=self.sel.valores().get("res"))
+        self._desde = time.time() if activo else None
         self._refrescar_visor(probando=activo)
 
     def _al_region(self, activo):
@@ -715,8 +834,186 @@ class PanelRenderDesk(QtWidgets.QWidget):
         self.servicios.region(activo)
         self._refrescar_visor(region=activo)
 
+    def _al_elegir_camara_reinicia(self):
+        if self._desde is not None:
+            self._desde = time.time()
+
     def _al_instantanea(self):
-        self.servicios.instantanea()
+        self.instantanea()
+
+    # ------------------------------------------------------------ historial
+
+    def historial(self):
+        return historial.Historial(self.servicios.carpeta_historial())
+
+    def instantanea(self):
+        """Guarda la prueba actual: imagen del visor, tiempo que lleva y todos los ajustes."""
+        if self._temporizador.isActive():
+            self.aplicar_pendiente()
+        self.servicios.instantanea()                    # también en el visor de Arnold, como siempre
+        h = self.historial()
+        numero, ruta = h.reservar()
+        self.servicios.guardar_imagen_visor(ruta)
+        segundos = None
+        if self._desde is not None and self.servicios.probando():
+            segundos = round(time.time() - self._desde, 1)
+        ancho, alto = self.servicios.resolucion()
+        entrada = h.guardar(numero, {
+            "segundos": segundos,
+            "region": bool(self.servicios.en_region()),
+            "preset": self.sel.nombre(),
+            "valores": self.sel.valores(),
+            "seleccion": self.sel.a_dict(),
+            "camara": self.servicios.camara(),
+            "tamano": [ancho, alto],
+        })
+        self.refrescar_historial()
+        return entrada
+
+    def refrescar_historial(self):
+        entradas = self.historial().entradas()
+        self.tira.poner(entradas)
+        self.cuenta_historial.setText(t("historial.cuenta", n=len(entradas)) if entradas else "")
+        self._refrescar_estimado(entradas)
+
+    def _al_comparar(self, entradas):
+        entradas = sorted((e for e in entradas if e), key=lambda e: e.get("numero", 0))
+        if len(entradas) == 2:
+            a, b = entradas
+            dialogo = CompararAB(a.get("ruta_imagen"), b.get("ruta_imagen"), texto_entrada(a), texto_entrada(b), self)
+        elif len(entradas) == 1:
+            ahora = os.path.join(self.servicios.carpeta_historial(), "ahora.png")
+            self.servicios.guardar_imagen_visor(ahora)
+            a = entradas[0]
+            dialogo = CompararAB(a.get("ruta_imagen"), ahora, texto_entrada(a), t("comparar.ahora"), self)
+        else:
+            return None
+        dialogo.setAttribute(Qt.WA_DeleteOnClose, True)
+        dialogo.show()
+        self._dialogo_comparar = dialogo
+        return dialogo
+
+    def _al_recuperar(self, entrada):
+        """Vuelve exactamente a esa prueba: preset y retoques, cámara y tamaño."""
+        self._temporizador.stop()
+        valores = entrada.get("valores") or {}
+        datos = entrada.get("seleccion") or {}
+        if datos.get("calidad"):
+            self.sel = modelo.Seleccion.de_dict(datos, base=valores)
+        else:
+            base, _ = self.servicios.leer()
+            base.update(valores)
+            self.sel = modelo.Seleccion(base=base)
+        camara = entrada.get("camara")
+        if camara and camara in self.servicios.camaras():
+            self.servicios.poner_camara(camara)
+        tamano = entrada.get("tamano")
+        if tamano and tuple(tamano) != tuple(self.servicios.resolucion()):
+            self.servicios.poner_resolucion(int(tamano[0]), int(tamano[1]))
+        self.aplicar_pendiente()
+        self.estado.setText(t("historial.recuperada", numero=entrada.get("numero", "?")))
+
+    def _al_borrar(self, entradas):
+        h = self.historial()
+        for entrada in entradas:
+            h.borrar(entrada.get("numero"))
+        self.refrescar_historial()
+
+    # ------------------------------------------------------------ salida y render final
+
+    def _refrescar_salida(self):
+        if not hasattr(self, "pestana_salida"):
+            return
+        que = self.sel.salida if self.sel.hay_preset() else self.servicios.preferencia("que", "fija")
+        self.pestana_salida.poner_que(que)
+        self._refrescar_estimado()
+
+    def _al_que(self, que):
+        """Secuencia y giro fijan el patrón de ruido: cambia también los valores de calidad."""
+        self.servicios.guardar_preferencia("que", que)
+        if self.sel.hay_preset() and self.sel.salida != que:
+            self.sel.salida = que
+            self._cambio()
+        else:
+            self.refrescar()
+
+    def _refrescar_estimado(self, entradas=None):
+        if not hasattr(self, "pestana_salida"):
+            return
+        total = self.pestana_salida.total()
+        aviso = ""
+        if self.sel.hay_preset() and self.sel.calidad != "final":
+            aviso = t("render_final.aviso_calidad", preset=self.sel.nombre())
+        if entradas is None:
+            entradas = self.historial().entradas()
+        prueba = next((e for e in entradas if e.get("segundos") and not e.get("region") and e.get("valores")), None)
+        if prueba is None:
+            self.pestana_salida.poner_estimado(t("render_final.estimado_sin", total=total), aviso)
+            return
+        v_final = self.sel.valores()
+        v_final["res"] = 100
+        ancho, alto = self.servicios.resolucion()
+        p_ancho, p_alto = (prueba.get("tamano") or [ancho, alto])[:2]
+        pixeles = (ancho * alto) / float(max(1, p_ancho * p_alto))
+        segundos = coste.estimar_final(prueba["segundos"], prueba["valores"], v_final, self.sel.extras,
+                                       self.sel.escena if self.sel.hay_preset() else "producto",
+                                       fotogramas=total) * pixeles
+        self.pestana_salida.poner_estimado(
+            t("render_final.estimado", tiempo=coste.texto_duracion(segundos), total=total,
+              numero=prueba.get("numero", "?")), aviso)
+
+    def render_en_marcha(self):
+        return self.lanzamiento is not None and self.lanzamiento.en_marcha()
+
+    def _al_render_final(self):
+        if self.render_en_marcha():
+            return None
+        if self._temporizador.isActive():
+            self.aplicar_pendiente()
+        que = self.pestana_salida.que
+        try:
+            datos = self.servicios.preparar_render(que, self.pestana_salida.nucleos())
+        except Exception as error:  # noqa: BLE001 - se enseña al usuario y se sigue
+            self.tarjeta_render.empezar(0)
+            self.tarjeta_render.terminar(False, t("render_final.no_preparado", error=error))
+            return None
+        self._carpeta_final = datos["carpeta"]
+        self.lanzamiento = lanzador.Lanzamiento(datos["comando"], datos["carpeta"], datos["extension"],
+                                                datos["total"], registro=datos.get("registro"),
+                                                entorno=datos.get("entorno"), padre=self)
+        self.lanzamiento.progreso.connect(self._al_progreso_render)
+        self.lanzamiento.terminado.connect(self._al_terminar_render)
+        self.tarjeta_render.empezar(datos["total"])
+        self.pestana_salida.poner_en_marcha(True)
+        self.lanzamiento.empezar()
+        return self.lanzamiento
+
+    def _al_progreso_render(self, hechos, total, porcentaje):
+        self.tarjeta_render.progreso(hechos, total, porcentaje, self.lanzamiento.restante())
+
+    def _al_terminar_render(self, bien, motivo):
+        lanz = self.lanzamiento
+        tiempo = coste.texto_duracion(lanz.segundos())
+        if motivo == "bien":
+            texto = t("render_final.bien", hechos=lanz.hechos, tiempo=tiempo, carpeta=lanz.carpeta)
+        elif motivo == "cancelado":
+            texto = t("render_final.cancelado", hechos=lanz.hechos)
+        elif motivo == "no_arranca":
+            texto = t("render_final.no_arranca", orden=lanz.comando[0])
+        else:
+            texto = t("render_final.fallo", registro=lanz.registro or "")
+        self.tarjeta_render.terminar(bien, texto)
+        self.pestana_salida.poner_en_marcha(False)
+        self.servicios.aviso_terminado(t("render_final.aviso." + ("bien" if bien else "mal"),
+                                         hechos=lanz.hechos, total=lanz.total, tiempo=tiempo))
+
+    def _al_cancelar_render(self):
+        if self.render_en_marcha():
+            self.lanzamiento.cancelar()
+
+    def _al_abrir_carpeta(self):
+        if self._carpeta_final:
+            self.servicios.abrir_carpeta(self._carpeta_final)
 
     def _al_modo_render(self, activo):
         if self._quieto:
@@ -731,6 +1028,6 @@ class PanelRenderDesk(QtWidgets.QWidget):
             self.aplicar_pendiente()
 
     def detener(self):
-        """Para del todo (al descargar el plugin)."""
+        """Para del todo (al descargar el plugin). Un render final en marcha sigue: es otro proceso."""
         self.cerrar()
         self._vigia.stop()
