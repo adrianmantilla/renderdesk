@@ -68,6 +68,22 @@ def principal():
     return wrapInstance(int(omui.MQtUtil.mainWindow()), QtWidgets.QWidget)
 
 
+def evento(texto):
+    INFORME.setdefault("eventos", []).append(texto)
+
+
+def vigilar_interfaz():
+    """Anota cuándo Maya crea o cierra el panel (para ver si se pierde)."""
+    m = M["interfaz"]
+    for nombre in ("restaurar", "al_cerrar", "_entrar", "_salir", "_colocar"):
+        original = getattr(m, nombre)
+
+        def envuelta(*a, _o=original, _n=nombre, **k):
+            evento("{} · {}".format(len(INFORME["pasos"]), _n))
+            return _o(*a, **k)
+        setattr(m, nombre, envuelta)
+
+
 def ventana_del_panel():
     """La ventana de primer nivel que contiene el panel (la de Maya o una flotante)."""
     p = M["interfaz"].ventana()
@@ -100,6 +116,7 @@ def valores_escena():
 
 @paso("escena")
 def p_escena():
+    cmds.scriptEditorInfo(historyFilename=os.path.join(SALIDA, "script_editor.txt"), writeHistory=True)
     cmds.file(new=True, force=True)
     if not cmds.pluginInfo("mtoa", query=True, loaded=True):
         cmds.loadPlugin("mtoa")
@@ -144,11 +161,19 @@ def p_abrir():
     from renderdesk import espacio, interfaz_maya, maya_ajustes, modelo, presets, visor
     M.update(interfaz=interfaz_maya, visor=visor, ajustes=maya_ajustes, espacio=espacio, presets=presets,
              modelo=modelo)
+    vigilar_interfaz()
     r = {"menu": cmds.menu(interfaz_maya.MENU, exists=True) or cmds.menuItem(interfaz_maya.MENU, exists=True),
          "ordenes": [n for n in interfaz_maya.COMANDOS if cmds.runTimeCommand(n, exists=True)]}
     interfaz_maya.mostrar()
     r["controles"] = controles()
     r["visor_controlable"] = visor.controlable()
+    crudo = {}
+    for nombre in ("Run IPR", "Camera", "Test Resolution", "Crop Region"):
+        try:
+            crudo[nombre] = repr(cmds.arnoldRenderView(get=nombre))
+        except Exception as error:  # noqa: BLE001
+            crudo[nombre] = "{}: {}".format(type(error).__name__, error)
+    r["get_crudo"] = crudo
     p = panel()
     r["chip"] = p.chip.text() if p else None
     r["camaras"] = [p.combo_camara.itemText(i) for i in range(p.combo_camara.count())] if p else None
@@ -184,6 +209,8 @@ def p_probar():
 def p_probando():
     p = panel()
     return {"probando": M["visor"].probando(), "estado": p.estado.text(), "controles": controles(),
+            "boton": p.boton_probar.text(), "camara_visor": M["visor"].camara(),
+            "res_prueba": M["visor"].resolucion_prueba(),
             "captura": captura(ventana_del_panel(), "f1_2_probando.png")}
 
 
@@ -210,7 +237,7 @@ def p_experto():
 def p_region():
     p = panel()
     p.boton_region.click()
-    r = {"en_region": M["visor"].en_region()}
+    r = {"habilitado": p.boton_region.isEnabled(), "en_region": M["visor"].en_region()}
     p.boton_region.click()
     r["tras_quitar"] = M["visor"].en_region()
     p.boton_instantanea.click()
@@ -336,6 +363,14 @@ def p_descargar():
     return {"controles": controles(), "menu": cmds.menu("RenderDeskMenu", exists=True)}
 
 
+@paso("parar")
+def p_parar():
+    p = panel()
+    if p is not None and p.boton_probar.isChecked():
+        p.boton_probar.click()
+    return {"probando": M["visor"].probando()}
+
+
 def fin():
     INFORME["fin"] = True
     guardar()
@@ -344,11 +379,25 @@ def fin():
         cmds.quit(force=True)
 
 
-PLAN = [(0, p_escena), (1000, p_plugin), (3000, p_abrir), (6000, p_preset), (8000, p_probar),
-        (16000, p_probando), (18000, p_detalle), (22000, p_experto), (23000, p_region), (26000, p_fuera),
-        (29000, p_fuera_visto), (30000, p_deshacer), (33000, p_deshacer_visto), (34000, p_camara),
-        (37000, p_modo), (43000, p_en_modo), (45000, p_salir), (50000, p_fuera_modo), (52000, p_otra_vez),
-        (57000, p_otra_vez_dentro), (59000, p_restaurar), (64000, p_descargar), (66000, fin)]
-for ms, fn in PLAN:
-    QtCore.QTimer.singleShot(8000 + ms, fn)       # margen para que Maya termine de arrancar
+# (espera antes del paso en ms, paso). Cada paso programa el siguiente al terminar: así un
+# paso que hace esperar a Maya (cargar un plugin) no deja que se cuelen los siguientes.
+PLAN = [(8000, p_escena), (1000, p_plugin), (2000, p_abrir), (3000, p_preset), (2000, p_probar),
+        (8000, p_probando), (2000, p_detalle), (4000, p_experto), (1000, p_region), (3000, p_fuera),
+        (3000, p_fuera_visto), (1000, p_deshacer), (3000, p_deshacer_visto), (1000, p_camara),
+        (3000, p_modo), (6000, p_en_modo), (2000, p_salir), (5000, p_fuera_modo), (2000, p_otra_vez),
+        (5000, p_otra_vez_dentro), (2000, p_parar), (2000, p_restaurar), (5000, p_descargar), (2000, fin)]
+
+
+def _lanzar(i=0):
+    if i >= len(PLAN):
+        return
+    espera, fn = PLAN[i]
+
+    def correr():
+        fn()
+        _lanzar(i + 1)
+    QtCore.QTimer.singleShot(espera, correr)
+
+
+_lanzar()
 print("RENDERDESK PRUEBA programada; resultados en", SALIDA)

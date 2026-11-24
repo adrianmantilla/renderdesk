@@ -41,8 +41,21 @@ def _get(nombre):
 
 
 def controlable():
-    """True si este MtoA deja manejar el visor desde fuera (opt/get)."""
-    return disponible() and _get("Run IPR") is not None
+    """True si este MtoA deja manejar el visor desde fuera (opt/get).
+
+    En MtoA 5.6 ``get`` devuelve None mientras el visor no ha renderizado nada, así
+    que no sirve mirar el valor: lo que falla en las versiones sin control es el
+    propio parámetro (Maya lanza TypeError por parámetro desconocido).
+    """
+    if not disponible():
+        return False
+    try:
+        _cmds().arnoldRenderView(get="Run IPR")
+    except TypeError:
+        return False
+    except RuntimeError:
+        pass
+    return True
 
 
 def abierto():

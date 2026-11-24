@@ -612,6 +612,8 @@ class PanelRenderDesk(QtWidgets.QWidget):
         """Cada poco: estado del visor y cambios hechos fuera del panel (Render Settings, Ctrl+Z...)."""
         if self._temporizador.isActive():
             return                                  # hay un cambio nuestro sin escribir todavía
+        if self.servicios.en_maya and not self.isVisible():
+            return
         if adoptar and self.servicios.seleccion() != self._guardada:
             self.al_cambiar_escena()                # Ctrl+Z, o la escena cambió por otro lado
             return
@@ -724,7 +726,11 @@ class PanelRenderDesk(QtWidgets.QWidget):
     # ------------------------------------------------------------ cierre
 
     def cerrar(self):
-        """Escribe lo pendiente y para los temporizadores (Maya lo llama al cerrar el panel)."""
+        """Escribe lo pendiente (Maya lo llama al cerrar el panel; puede volver a abrirse)."""
         if self._temporizador.isActive():
             self.aplicar_pendiente()
+
+    def detener(self):
+        """Para del todo (al descargar el plugin)."""
+        self.cerrar()
         self._vigia.stop()

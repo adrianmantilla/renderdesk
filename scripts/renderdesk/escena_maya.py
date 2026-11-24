@@ -86,6 +86,12 @@ class ServiciosMaya(object):
     def _transformada(forma):
         return (cmds.listRelatives(forma, parent=True) or [forma])[0]
 
+    @staticmethod
+    def _forma(transformada):
+        """El visor de Arnold nombra las cámaras por su forma («perspShape»)."""
+        formas = cmds.listRelatives(transformada, shapes=True, type="camera") or []
+        return formas[0] if formas else transformada
+
     def camaras(self):
         """Cámaras que tiene sentido renderizar: las de perspectiva y las ortográficas marcadas como renderizables."""
         lista = []
@@ -110,7 +116,7 @@ class ServiciosMaya(object):
                 if bool(cmds.getAttr(forma + ".renderable")) != es:
                     cmds.setAttr(forma + ".renderable", es)
         if visor.abierto():
-            visor.poner_camara(transformada)
+            visor.poner_camara(self._forma(transformada))
 
     def resolucion(self):
         return (int(cmds.getAttr("defaultResolution.width")), int(cmds.getAttr("defaultResolution.height")))
@@ -143,7 +149,7 @@ class ServiciosMaya(object):
             visor.abrir()
             camara = self.camara()
             if camara:
-                visor.poner_camara(camara)
+                visor.poner_camara(self._forma(camara))
             if resolucion_prueba:
                 visor.poner_resolucion_prueba(resolucion_prueba)
         return visor.probar(activo)

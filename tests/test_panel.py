@@ -29,7 +29,7 @@ class Panel(unittest.TestCase):
         self.p = PanelRenderDesk(self.s)
 
     def tearDown(self):
-        self.p.cerrar()
+        self.p.detener()
         self.p.deleteLater()
 
     def test_arranca_con_la_escena(self):
@@ -94,7 +94,7 @@ class Panel(unittest.TestCase):
         self.s.prefs["nivel"] = "experto"
         otro = PanelRenderDesk(self.s)
         self.assertEqual(otro.nivel(), "experto")
-        otro.cerrar()
+        otro.detener()
 
     def test_restaurar(self):
         self.s.valores["aa"] = 7
@@ -133,7 +133,7 @@ class Panel(unittest.TestCase):
         otro = PanelRenderDesk(self.s)                  # como al volver a abrir la escena
         self.assertEqual(otro.chip.text(), "Final · Exterior")
         self.assertTrue(otro.botones_calidad["final"].isChecked())
-        otro.cerrar()
+        otro.detener()
 
     def test_barra(self):
         self.assertEqual(self.p.combo_camara.currentText(), "persp")

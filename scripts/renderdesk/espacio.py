@@ -73,21 +73,41 @@ def salir():
     return destino
 
 
-def acoplar_visor_grande(control_visor):
-    """Acopla el visor a la derecha de la ventana de Maya, con la mitad del ancho."""
+def _flotante(control):
     cmds = _cmds()
-    if not cmds.workspaceControl(control_visor, exists=True):
-        return False
-    try:
-        if cmds.workspaceControl(control_visor, query=True, floating=True):
-            cmds.workspaceControl(control_visor, edit=True, dockToMainWindow=("right", False))
-    except RuntimeError:
-        return False
+    return bool(cmds.workspaceControl(control, query=True, floating=True))
+
+
+def colocar(control_panel, control_visor):
+    """Panel en una columna a la derecha de la ventana de Maya y el visor a su izquierda.
+
+    Solo mueve lo que está flotando: si el espacio ya se guardó colocado, no se toca.
+    Devuelve una lista de avisos (vacía si todo fue bien).
+    """
+    cmds = _cmds()
+    avisos = []
+    for control in (control_panel, control_visor):
+        if not cmds.workspaceControl(control, exists=True):
+            avisos.append("no existe " + control)
+    if avisos:
+        return avisos
+    if _flotante(control_panel):
+        try:
+            cmds.workspaceControl(control_panel, edit=True, dockToMainWindow=("right", False))
+        except RuntimeError as error:
+            avisos.append("panel: {}".format(error))
+    if _flotante(control_visor) and not _flotante(control_panel):
+        try:
+            cmds.workspaceControl(control_visor, edit=True, dockToControl=(control_panel, "left"))
+        except RuntimeError as error:
+            avisos.append("visor: {}".format(error))
     try:
         from .qt import ventana_maya
         principal = ventana_maya()
-        if principal is not None:
+        if principal is not None and not _flotante(control_visor):
             cmds.workspaceControl(control_visor, edit=True, resizeWidth=int(principal.width() * ANCHO_VISOR))
-    except (RuntimeError, TypeError):
-        pass
-    return True
+    except (RuntimeError, TypeError) as error:
+        avisos.append("ancho: {}".format(error))
+    for aviso in avisos:
+        cmds.warning("RenderDesk (Modo render): " + aviso)
+    return avisos

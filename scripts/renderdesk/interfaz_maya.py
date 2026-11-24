@@ -28,8 +28,24 @@ def servicios():
 
 
 def ventana():
+    """El panel, si existe. Si se perdió la referencia (Maya rehízo la ventana), se busca dentro del control."""
     v = _estado["ventana"]
-    return v if sigue_vivo(v) else None
+    if sigue_vivo(v):
+        return v
+    _estado["ventana"] = None
+    if not cmds.workspaceControl(CONTROL, exists=True):
+        return None
+    from maya import OpenMayaUI as omui
+    from renderdesk.panel import NOMBRE_OBJETO, PanelRenderDesk
+    puntero = omui.MQtUtil.findControl(CONTROL)
+    if not puntero:
+        return None
+    contenedor = shiboken.wrapInstance(int(puntero), QtWidgets.QWidget)
+    encontrado = contenedor.findChild(QtWidgets.QWidget, NOMBRE_OBJETO)
+    if isinstance(encontrado, PanelRenderDesk):
+        _estado["ventana"] = encontrado
+        return encontrado
+    return None
 
 
 def restaurar():
@@ -81,10 +97,10 @@ def alternar():
 
 
 def al_cerrar():
+    """Maya lo llama al cerrar el control. El panel puede seguir vivo (se vuelve a abrir igual)."""
     v = ventana()
     if v is not None:
         v.cerrar()
-    _estado["ventana"] = None
 
 
 # ---------- acciones (menú, atajos y, más adelante, Radial) ----------
@@ -112,8 +128,8 @@ def alternar_modo_render():
 
 
 def _colocar():
+    """Panel en una columna a la derecha de Maya y el visor de Arnold a su izquierda, grande."""
     visor.abrir()
-    espacio.acoplar_visor_grande(visor.CONTROL)
     if cmds.workspaceControl(CONTROL, exists=True):
         cmds.workspaceControl(CONTROL, edit=True, restore=True, visible=True)
         if ventana() is None:
@@ -121,7 +137,7 @@ def _colocar():
             mostrar(con_visor=False)
     else:
         mostrar(con_visor=False)
-    _acoplar_al_visor()
+    espacio.colocar(CONTROL, visor.CONTROL)
 
 
 def _refrescar_panel():
@@ -138,12 +154,19 @@ def _entrar():
     cmds.evalDeferred(_refrescar_panel, lowestPriority=True)
 
 
+def _reabrir():
+    """El espacio de antes se guardó sin el panel: se vuelve a abrir junto al visor, como estaba."""
+    if not cmds.workspaceControl(CONTROL, exists=True):
+        mostrar()
+    _refrescar_panel()
+
+
 def _salir():
     try:
         espacio.salir()
     except RuntimeError as error:
         cmds.warning(t("aviso.modo_render", error=error))
-    cmds.evalDeferred(_refrescar_panel, lowestPriority=True)
+    cmds.evalDeferred(_reabrir, lowestPriority=True)
 
 
 # ---------- arranque ----------
@@ -194,7 +217,7 @@ def detener():
     _estado["trabajos"] = []
     v = ventana()
     if v is not None:
-        v.cerrar()
+        v.detener()
     if cmds.workspaceControl(CONTROL, exists=True):
         cmds.deleteUI(CONTROL)
     if v is not None:
