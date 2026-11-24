@@ -1,0 +1,26 @@
+{
+  "_nota": "Ajustes que maneja RenderDesk. 'candidatos' son los nombres del atributo en defaultArnoldRenderOptions, de más nuevo a más antiguo: se usa el primero que exista. 'fabrica' es el valor de Arnold recién instalado. Las claves especiales (den, res) no son atributos de opciones.",
+  "orden": ["aa", "adapt", "aa_max", "umbral", "diff", "spec", "trans", "sss", "vol", "dD", "sD", "tD", "vD", "total", "at", "clamp", "lock", "mb", "den", "res"],
+  "ajustes": {
+    "aa":     {"grupo": "muestreo", "tipo": "int",   "candidatos": ["AASamples"], "fabrica": 3, "min": 1, "max": 12},
+    "adapt":  {"grupo": "muestreo", "tipo": "bool",  "candidatos": ["enableAdaptiveSampling"], "fabrica": 0},
+    "aa_max": {"grupo": "muestreo", "tipo": "int",   "candidatos": ["AASamplesMax"], "fabrica": 20, "min": 1, "max": 40},
+    "umbral": {"grupo": "muestreo", "tipo": "float", "candidatos": ["AAAdaptiveThreshold"], "fabrica": 0.015, "min": 0.001, "max": 0.2},
+    "diff":   {"grupo": "muestreo", "tipo": "int",   "candidatos": ["GIDiffuseSamples"], "fabrica": 2, "min": 0, "max": 8},
+    "spec":   {"grupo": "muestreo", "tipo": "int",   "candidatos": ["GISpecularSamples"], "fabrica": 2, "min": 0, "max": 8},
+    "trans":  {"grupo": "muestreo", "tipo": "int",   "candidatos": ["GITransmissionSamples"], "fabrica": 2, "min": 0, "max": 8},
+    "sss":    {"grupo": "muestreo", "tipo": "int",   "candidatos": ["GISssSamples"], "fabrica": 2, "min": 0, "max": 8},
+    "vol":    {"grupo": "muestreo", "tipo": "int",   "candidatos": ["GIVolumeSamples"], "fabrica": 2, "min": 0, "max": 8},
+    "dD":     {"grupo": "rebotes",  "tipo": "int",   "candidatos": ["GIDiffuseDepth"], "fabrica": 1, "min": 0, "max": 8},
+    "sD":     {"grupo": "rebotes",  "tipo": "int",   "candidatos": ["GISpecularDepth"], "fabrica": 1, "min": 0, "max": 8},
+    "tD":     {"grupo": "rebotes",  "tipo": "int",   "candidatos": ["GITransmissionDepth"], "fabrica": 8, "min": 0, "max": 32},
+    "vD":     {"grupo": "rebotes",  "tipo": "int",   "candidatos": ["GIVolumeDepth"], "fabrica": 0, "min": 0, "max": 8},
+    "total":  {"grupo": "rebotes",  "tipo": "int",   "candidatos": ["GITotalDepth"], "fabrica": 10, "min": 1, "max": 40},
+    "at":     {"grupo": "rebotes",  "tipo": "int",   "candidatos": ["autoTransparencyDepth"], "fabrica": 10, "min": 0, "max": 64},
+    "clamp":  {"grupo": "limpieza", "tipo": "float", "candidatos": ["indirectSampleClamp"], "fabrica": 10.0, "min": 0, "max": 100},
+    "lock":   {"grupo": "limpieza", "tipo": "bool",  "candidatos": ["lock_sampling_noise", "lockSamplingNoise", "lockSamplingPattern"], "fabrica": 0},
+    "mb":     {"grupo": "salida",   "tipo": "bool",  "candidatos": ["motion_blur_enable", "mbEnable", "mb_en"], "fabrica": 0},
+    "den":    {"grupo": "limpieza", "tipo": "bool",  "especial": "oidn", "fabrica": 0},
+    "res":    {"grupo": "salida",   "tipo": "int",   "especial": "resolucion_prueba", "fabrica": 100, "min": 10, "max": 100}
+  }
+}

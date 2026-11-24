@@ -1,0 +1,12 @@
+{
+  "_nota": "Reglas que el tipo de escena aplica sobre la calidad. op: poner, sumar, al_menos, como_mucho. 'salvo' lista calidades donde la regla no se aplica.",
+  "orden": ["producto", "interior", "exterior"],
+  "escenas": {
+    "producto": {"reglas": [{"clave": "sD", "op": "al_menos", "valor": 2, "salvo": ["borrador"]}]},
+    "interior": {"reglas": [{"clave": "diff", "op": "sumar", "valor": 1},
+                            {"clave": "dD", "op": "sumar", "valor": 1},
+                            {"clave": "dD", "op": "como_mucho", "valor": 3},
+                            {"clave": "clamp", "op": "como_mucho", "valor": 5.0}]},
+    "exterior": {"reglas": [{"clave": "dD", "op": "al_menos", "valor": 1}]}
+  }
+}

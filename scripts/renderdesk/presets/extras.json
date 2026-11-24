@@ -1,0 +1,98 @@
+{
+ "orden": [
+  "vidrio",
+  "sss",
+  "hojas",
+  "niebla",
+  "movimiento"
+ ],
+ "extras": {
+  "vidrio": {
+   "reglas": [
+    {
+     "clave": "trans",
+     "op": "sumar",
+     "valor": 1
+    },
+    {
+     "clave": "tD",
+     "op": "al_menos",
+     "valor": 12
+    },
+    {
+     "clave": "sD",
+     "op": "al_menos",
+     "valor": 3,
+     "salvo": [
+      "borrador"
+     ]
+    },
+    {
+     "clave": "sD",
+     "op": "al_menos",
+     "valor": 2,
+     "solo": [
+      "borrador"
+     ]
+    }
+   ]
+  },
+  "sss": {
+   "reglas": [
+    {
+     "clave": "sss",
+     "op": "sumar",
+     "valor": 1
+    }
+   ]
+  },
+  "hojas": {
+   "reglas": [
+    {
+     "clave": "at",
+     "op": "al_menos",
+     "valor": 16
+    },
+    {
+     "clave": "aa",
+     "op": "al_menos",
+     "valor": 5,
+     "solo": [
+      "final"
+     ]
+    }
+   ]
+  },
+  "niebla": {
+   "reglas": [
+    {
+     "clave": "vol",
+     "op": "sumar",
+     "valor": 1
+    },
+    {
+     "clave": "vD",
+     "op": "al_menos",
+     "valor": 1
+    }
+   ]
+  },
+  "movimiento": {
+   "reglas": [
+    {
+     "clave": "mb",
+     "op": "poner",
+     "valor": 1
+    },
+    {
+     "clave": "aa",
+     "op": "al_menos",
+     "valor": 6,
+     "solo": [
+      "final"
+     ]
+    }
+   ]
+  }
+ }
+}
