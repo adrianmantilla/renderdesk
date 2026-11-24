@@ -30,7 +30,8 @@ def preparar():
     if not cmds.objExists(OPCIONES):
         import mtoa.core
         mtoa.core.createOptions()
-    cmds.setAttr("defaultRenderGlobals.currentRenderer", "arnold", type="string")
+    if cmds.getAttr("defaultRenderGlobals.currentRenderer") != "arnold":
+        cmds.setAttr("defaultRenderGlobals.currentRenderer", "arnold", type="string")
 
 
 def atributo(clave):
@@ -144,6 +145,8 @@ def aplicar(valores, guardar_copia=True, etiqueta=""):
         d = presets.catalogo().get(clave)
         if d is None:
             continue
+        if clave in antes and antes[clave] == presets.ajustar_tipo(clave, valor):
+            continue                      # sin tocar: el render interactivo no se reinicia
         especial = d.get("especial")
         if especial == "oidn":
             if not poner_oidn(valor):
@@ -174,8 +177,12 @@ def restaurar():
     if not copia:
         return False
     aplicar(copia, guardar_copia=False)
-    _guardar_datos(copia=None, preset="")
+    _guardar_datos(copia=None, preset="", seleccion=None)
     return True
+
+
+def hay_copia():
+    return bool(_datos().get("copia"))
 
 
 # ---------- datos de RenderDesk guardados en la escena ----------
@@ -207,3 +214,12 @@ def _guardar_datos(**cambios):
 
 def preset_aplicado():
     return _datos().get("preset", "")
+
+
+def seleccion():
+    """Lo que el panel tenía elegido en esta escena (diccionario de ``modelo.Seleccion``), o None."""
+    return _datos().get("seleccion")
+
+
+def guardar_seleccion(datos):
+    _guardar_datos(seleccion=datos)

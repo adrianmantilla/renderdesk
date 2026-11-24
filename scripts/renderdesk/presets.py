@@ -107,7 +107,8 @@ def combinar(calidad="revision", escena="producto", con_extras=(), salida="fija"
     """Devuelve el diccionario completo de ajustes para esa combinación.
 
     ``cambios`` son retoques a mano (nivel Detalle o Experto) que se ponen encima
-    del preset, después de todas las reglas.
+    del preset, después de todas las reglas. El total de rebotes se recalcula con
+    ellos, salvo que el propio total sea uno de los retoques.
     """
     if calidad not in calidades():
         raise KeyError("Calidad desconocida: {}".format(calidad))
@@ -123,9 +124,11 @@ def combinar(calidad="revision", escena="producto", con_extras=(), salida="fija"
     if desconocidos:
         raise KeyError("Extras desconocidos: {}".format(", ".join(sorted(desconocidos))))
     aplicar_reglas(valores, _leer("salidas")["salidas"][salida]["reglas"], calidad)
-    _derivados(valores)
-    for clave, v in (cambios or {}).items():
+    cambios = cambios or {}
+    for clave, v in cambios.items():
         valores[clave] = ajustar_tipo(clave, v)
+    if "total" not in cambios:          # el total sigue a los rebotes salvo que se toque a mano
+        _derivados(valores)
     return valores
 
 
