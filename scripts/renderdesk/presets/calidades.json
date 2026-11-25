@@ -1,0 +1,68 @@
+{
+ "orden": [
+  "borrador",
+  "revision",
+  "final"
+ ],
+ "calidades": {
+  "borrador": {
+   "valores": {
+    "aa": 2,
+    "adapt": 0,
+    "diff": 1,
+    "spec": 1,
+    "trans": 1,
+    "sss": 1,
+    "vol": 1,
+    "dD": 1,
+    "sD": 1,
+    "tD": 4,
+    "vD": 0,
+    "at": 4,
+    "clamp": 5.0,
+    "den": 1,
+    "res": 50
+   }
+  },
+  "revision": {
+   "valores": {
+    "aa": 3,
+    "adapt": 0,
+    "diff": 2,
+    "spec": 2,
+    "trans": 2,
+    "sss": 2,
+    "vol": 1,
+    "dD": 1,
+    "sD": 1,
+    "tD": 6,
+    "vD": 0,
+    "at": 8,
+    "clamp": 10.0,
+    "den": 1,
+    "res": 100
+   }
+  },
+  "final": {
+   "valores": {
+    "aa": 4,
+    "adapt": 1,
+    "aa_max": 8,
+    "umbral": 0.015,
+    "diff": 2,
+    "spec": 2,
+    "trans": 2,
+    "sss": 2,
+    "vol": 2,
+    "dD": 2,
+    "sD": 2,
+    "tD": 8,
+    "vD": 1,
+    "at": 10,
+    "clamp": 10.0,
+    "den": 0,
+    "res": 100
+   }
+  }
+ }
+}

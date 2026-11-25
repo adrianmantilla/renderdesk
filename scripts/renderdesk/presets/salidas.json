@@ -1,0 +1,8 @@
+{
+  "orden": ["fija", "secuencia", "giro"],
+  "salidas": {
+    "fija":      {"reglas": []},
+    "secuencia": {"reglas": [{"clave": "lock", "op": "poner", "valor": 1}]},
+    "giro":      {"reglas": [{"clave": "lock", "op": "poner", "valor": 1}], "fotogramas": [1, 120]}
+  }
+}
